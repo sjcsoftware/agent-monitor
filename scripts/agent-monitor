@@ -134,6 +134,7 @@ cmd_status() {
   printf '  background   %s\n' "$(bg_loaded && echo on || echo off)"
   printf '  startup      %s\n' "$(startup_set && echo on || echo off)"
   printf '  codex hooks  %s\n' "$("$BIN" hooks status 2>/dev/null || echo unknown)"
+  printf '  transparent  %s\n' "$("$BIN" transparent 2>/dev/null || echo unknown)"
 }
 
 cmd_update() {
@@ -181,6 +182,7 @@ ${B}Usage:${R} agent-monitor [command]
   ${B}status${R}              Show what's running and configured
   ${B}hooks${R} [install|uninstall|status]
                       Codex approval hooks (shows when Codex waits on you)
+  ${B}transparent${R} <0-100>  Hover card background transparency (0 opaque, 100 clear)
   ${B}dump${R}                Print every session as JSON
   ${B}update${R}              Update to the latest release
   ${B}uninstall${R}           Remove Agent Monitor
@@ -210,6 +212,7 @@ case "${1:-run}" in
   stop) stop_running; ok "Agent Monitor stopped." ;;
   status) cmd_status ;;
   hooks) shift; exec "$BIN" hooks "$@" ;;
+  transparent | transparency) shift; exec "$BIN" transparent "$@" ;;
   dump) exec "$BIN" dump ;;
   update) shift; cmd_update "$@" ;;
   uninstall) cmd_uninstall ;;

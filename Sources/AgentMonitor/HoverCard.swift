@@ -50,6 +50,10 @@ final class CardView: NSView {
     private let fill = CALayer()
     /// Draws an opaque background (for offscreen previews where there's no blur behind).
     var opaqueBackground = false
+    /// Scales the card's background fill (1 = normal, 0 = clear); content is unaffected.
+    var backgroundOpacity: CGFloat = 1 {
+        didSet { if backgroundOpacity != oldValue { needsDisplay = true } }
+    }
 
     var model: CardModel? {
         didSet {
@@ -99,10 +103,10 @@ final class CardView: NSView {
         guard let m = model else { return }
         let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 16, yRadius: 16)
         if opaqueBackground {
-            Theme.hex(0x111A30).setFill()
+            Theme.hex(0x111A30, backgroundOpacity).setFill()
             card.fill()
         }
-        Theme.cardFill.setFill()
+        Theme.cardFill.withAlphaComponent(Theme.cardFill.alphaComponent * backgroundOpacity).setFill()
         card.fill()
         Theme.cardBorder.setStroke()
         card.lineWidth = 1
@@ -204,6 +208,7 @@ final class CardView: NSView {
 final class CardController {
     private let panel: NSPanel
     private let cardView: CardView
+    private let blur: NSVisualEffectView
     private(set) var shownId: String?
     private weak var anchor: PillView?
 
@@ -222,7 +227,7 @@ final class CardController {
         panel.animationBehavior = .none
 
         let root = NSView(frame: NSRect(origin: .zero, size: size))
-        let blur = NSVisualEffectView(frame: root.bounds)
+        blur = NSVisualEffectView(frame: root.bounds)
         blur.material = .hudWindow
         blur.blendingMode = .behindWindow
         blur.state = .active
@@ -234,6 +239,15 @@ final class CardController {
         root.addSubview(blur)
         root.addSubview(cardView)
         panel.contentView = root
+        setTransparency(Settings.transparency)
+    }
+
+    /// 0 = normal blurred background, 100 = fully clear (text, chips and tiles stay as they are).
+    func setTransparency(_ value: Int) {
+        let opacity = 1 - CGFloat(min(max(value, 0), 100)) / 100
+        blur.alphaValue = opacity
+        blur.isHidden = opacity == 0
+        cardView.backgroundOpacity = opacity
     }
 
     func show(_ card: CardModel, anchor pill: PillView) {

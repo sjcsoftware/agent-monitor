@@ -49,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.locator.prune(alive: Set(sessions.map(\.pid)))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.offerCodexHooks() }
+        DistributedNotificationCenter.default().addObserver(forName: Settings.changed, object: nil, queue: .main) { [weak self] note in
+            self?.card.setTransparency(Settings.transparency(from: note))
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

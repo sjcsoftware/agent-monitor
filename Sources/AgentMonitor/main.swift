@@ -8,6 +8,8 @@ case "dump":
     exit(Commands.dump())
 case "hooks":
     exit(Commands.hooks(Array(args.dropFirst())))
+case "transparent":
+    exit(Commands.transparent(Array(args.dropFirst())))
 case "preview":
     exit(Commands.preview(args.count > 1 ? args[1] : "preview.png", hovered: args.count > 2 ? Int(args[2]) ?? 0 : 0))
 case "version", "--version", "-v":
@@ -16,7 +18,7 @@ case "version", "--version", "-v":
 case nil, "run":
     break
 default:
-    fputs("usage: AgentMonitor [run|dump|hooks|version]\n", stderr)
+    fputs("usage: AgentMonitor [run|dump|hooks|transparent|version]\n", stderr)
     exit(2)
 }
 

@@ -16,8 +16,44 @@ enum AppInfo {
     }
 }
 
+/// User settings, stored in the app's defaults domain. Changes are broadcast so a running instance applies them live.
+enum Settings {
+    static let changed = Notification.Name("com.sjcsoftware.agent-monitor.settings")
+    private static let transparencyKey = "transparency"
+
+    /// Hover card background transparency: 0 = opaque (default), 100 = fully clear.
+    static var transparency: Int {
+        get { min(max(UserDefaults.standard.integer(forKey: transparencyKey), 0), 100) }
+        set {
+            UserDefaults.standard.set(min(max(newValue, 0), 100), forKey: transparencyKey)
+            UserDefaults.standard.synchronize()
+            DistributedNotificationCenter.default().postNotificationName(
+                changed, object: nil, userInfo: [transparencyKey: transparency], deliverImmediately: true)
+        }
+    }
+
+    static func transparency(from note: Notification) -> Int {
+        (note.userInfo?[transparencyKey] as? Int).map { min(max($0, 0), 100) } ?? transparency
+    }
+}
+
 /// Non-GUI subcommands of the app binary (the `agent-monitor` script calls these).
 enum Commands {
+    /// `transparent` prints the current value; `transparent <0-100>` sets it.
+    static func transparent(_ args: [String]) -> Int32 {
+        guard let arg = args.first else {
+            print(Settings.transparency)
+            return 0
+        }
+        guard args.count == 1, let value = Int(arg), (0...100).contains(value) else {
+            fputs("usage: agent-monitor transparent <0-100>   (0 = opaque, 100 = fully transparent)\n", stderr)
+            return 2
+        }
+        Settings.transparency = value
+        print("Hover card transparency set to \(value).")
+        return 0
+    }
+
     /// Prints one JSON snapshot of every session's card model.
     static func dump() -> Int32 {
         let now = Date().timeIntervalSince1970
