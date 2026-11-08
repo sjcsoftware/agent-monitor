@@ -68,7 +68,9 @@ public final class SystemProcesses: ProcessInspecting {
         guard pid > 0 else { return nil }
         var bi = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bi, size) == size else { return nil }
+        // proc_pidinfo is denied for other users' processes (e.g. root's /usr/bin/login between a
+        // terminal and its shell); sysctl's kinfo_proc still works for those.
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bi, size) == size else { return Self.kinfo(pid) }
         if bi.pbi_status == 5 /* SZOMB */ { return nil }
         let long = Self.cString(bi.pbi_name)
         let name = long.isEmpty ? Self.cString(bi.pbi_comm) : long
@@ -172,6 +174,24 @@ public final class SystemProcesses: ProcessInspecting {
             i += 1
         }
         return (args, env)
+    }
+
+    private static func kinfo(_ pid: Int32) -> ProcInfo? {
+        var kp = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &kp, &size, nil, 0) == 0, size > 0, kp.kp_proc.p_pid == pid else { return nil }
+        if kp.kp_proc.p_stat == 5 /* SZOMB */ { return nil }
+        let tdev = UInt32(bitPattern: kp.kp_eproc.e_tdev)
+        let start = kp.kp_proc.p_un.__p_starttime
+        return ProcInfo(
+            pid: pid,
+            ppid: kp.kp_eproc.e_ppid,
+            name: cString(kp.kp_proc.p_comm),
+            hasTTY: tdev != UInt32.max && tdev != 0,
+            tdev: tdev,
+            started: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
+        )
     }
 
     private static func cString<T>(_ tuple: T) -> String {

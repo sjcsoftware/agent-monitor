@@ -148,6 +148,20 @@ struct LineTailTests {
         #expect(open.contains("held.jsonl"))
     }
 
+    @Test func ancestryWalksThroughRootOwnedProcesses() throws {
+        // Terminals start shells via root's /usr/bin/login; the walk to the terminal app must not stop there.
+        let procs = SystemProcesses()
+        let launchd = try #require(procs.info(1))
+        #expect(launchd.name == "launchd")
+        var current = getpid()
+        for _ in 0..<64 {
+            let info = try #require(procs.info(current), "lost the chain at pid \(current)")
+            if info.ppid <= 1 { return }
+            current = info.ppid
+        }
+        Issue.record("ancestry did not reach launchd")
+    }
+
     @Test func isoTimestamps() {
         #expect(Time.parse("2026-11-08T15:11:18.500Z") == 1_794_150_678.5)
         #expect(Time.parse("2026-11-08T16:11:18+01:00") == 1_794_150_678)

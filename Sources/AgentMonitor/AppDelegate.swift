@@ -26,10 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.card.hide()
             if let session = self.store.sessions[id] { self.locator.focus(session) }
         }
-        strip.onMenu = { [weak self] pill, event in
+        strip.onMenu = { [weak self] pill in
             guard let self else { return }
             self.card.hide()
-            NSMenu.popUpContextMenu(self.makeMenu(), with: event, for: pill)
+            self.makeMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: -6), in: pill)
         }
         strip.onLayout = { [weak self] in self?.card.reposition() }
 

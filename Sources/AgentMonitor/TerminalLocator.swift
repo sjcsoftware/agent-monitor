@@ -1,6 +1,9 @@
 import AgentMonitorCore
 import AppKit
 import ApplicationServices
+import os
+
+private let focusLog = Logger(subsystem: "com.sjcsoftware.agent-monitor", category: "focus")
 
 /// Finds and raises the terminal window hosting a session (GUIDE §5). Results are cached per pid.
 final class TerminalLocator {
@@ -34,8 +37,12 @@ final class TerminalLocator {
     }
 
     func focus(_ session: Session) {
-        guard let target = cache[session.pid].flatMap({ $0.app.isTerminated ? nil : $0 }) ?? resolve(session.pid) else { return }
+        guard let target = cache[session.pid].flatMap({ $0.app.isTerminated ? nil : $0 }) ?? resolve(session.pid) else {
+            focusLog.info("no terminal app found for pid \(session.pid, privacy: .public)")
+            return
+        }
         cache[session.pid] = target
+        focusLog.info("focus pid \(session.pid, privacy: .public) in \(target.app.bundleIdentifier ?? "?", privacy: .public) tty \(target.tty ?? "-", privacy: .public)")
         if let tmux = target.tmux { selectTmuxPane(tmux) }
         let bundle = target.app.bundleIdentifier ?? ""
         switch bundle {
@@ -146,6 +153,7 @@ final class TerminalLocator {
     private func runAppleScript(_ source: String) -> Bool {
         var error: NSDictionary?
         let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
+        if let error { focusLog.error("AppleScript failed: \(error.description, privacy: .public)") }
         return error == nil && result?.booleanValue == true
     }
 

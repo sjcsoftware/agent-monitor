@@ -6,8 +6,6 @@ final class PillView: NSView {
     let id: String
     let kind: AgentKind
     var onHover: ((PillView, Bool) -> Void)?
-    var onClick: ((PillView) -> Void)?
-    var onMenu: ((PillView, NSEvent) -> Void)?
 
     private let content = CALayer()
     private let bg = CALayer()
@@ -126,14 +124,8 @@ final class PillView: NSView {
         onHover?(self, false)
     }
 
-    override func mouseDown(with event: NSEvent) {
-        if event.modifierFlags.contains(.control) { onMenu?(self, event); return }
-        onClick?(self)
-    }
-
-    override func rightMouseDown(with event: NSEvent) { onMenu?(self, event) }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    /// Clicks fall through to the status button (it owns mouse tracking in the menu bar).
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     /// Screen rectangle, used to anchor the hover card.
     var screenRect: NSRect? {
@@ -144,14 +136,14 @@ final class PillView: NSView {
 
 /// The menu-bar strip: a single status item whose width tracks the number of sessions.
 /// Pills are only created/removed when the id list changes, so an open hover card survives updates.
-final class StripController {
+final class StripController: NSObject {
     var onHover: ((String, PillView, Bool) -> Void)?
     var onClick: ((String) -> Void)?
-    var onMenu: ((PillView, NSEvent) -> Void)?
+    var onMenu: ((PillView) -> Void)?
     var onLayout: (() -> Void)?
 
     private let item: NSStatusItem
-    private let container = NSView()
+    private let container = PassthroughView()
     private var pills: [String: PillView] = [:]
     private var slots: [String] = []
     private var leaving = Set<String>()
@@ -161,14 +153,19 @@ final class StripController {
     private var gap: CGFloat { max(4, (6 * pillSize / 32).rounded()) }
     private let edge: CGFloat = 2
 
-    init() {
+    override init() {
         item = NSStatusBar.system.statusItem(withLength: 0)
         item.autosaveName = "AgentMonitorStrip"
         item.behavior = []
         item.isVisible = false
+        super.init()
         if let button = item.button {
             button.title = ""
             button.image = nil
+            (button.cell as? NSButtonCell)?.highlightsBy = []
+            button.target = self
+            button.action = #selector(buttonClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.setAccessibilityLabel("Agent Monitor")
             container.frame = button.bounds
             container.autoresizingMask = [.width, .height]
@@ -177,6 +174,19 @@ final class StripController {
     }
 
     func pill(_ id: String) -> PillView? { pills[id] }
+
+    /// The status button reports clicks; the pill under the pointer decides which session they're for.
+    @objc private func buttonClicked() {
+        let point = NSEvent.mouseLocation
+        guard let id = slots.first(where: { !leaving.contains($0) && (pills[$0]?.screenRect?.insetBy(dx: -gap / 2, dy: -4).contains(point) ?? false) }),
+              let pill = pills[id] else { return }
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            onMenu?(pill)
+        } else {
+            onClick?(id)
+        }
+    }
 
     func setIds(_ ids: [String], cards: [String: CardModel]) {
         let incoming = Set(ids)
@@ -202,8 +212,6 @@ final class StripController {
             guard let card = cards[id] else { continue }
             let pill = PillView(id: id, kind: card.kind, state: card.state)
             pill.onHover = { [weak self] p, inside in self?.onHover?(p.id, p, inside) }
-            pill.onClick = { [weak self] p in self?.onClick?(p.id) }
-            pill.onMenu = { [weak self] p, e in self?.onMenu?(p, e) }
             pills[id] = pill
             container.addSubview(pill)
             fresh.append(pill)
@@ -239,4 +247,9 @@ final class StripController {
         }
         onLayout?()
     }
+}
+
+/// Lets mouse clicks reach the status button underneath.
+final class PassthroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
