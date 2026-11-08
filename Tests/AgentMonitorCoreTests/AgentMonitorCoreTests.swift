@@ -360,11 +360,13 @@ struct CodexProviderTests {
         sqlite3_exec(db, """
         CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT, created_at INTEGER, updated_at INTEGER, source TEXT,
           cwd TEXT, title TEXT, archived INTEGER DEFAULT 0, first_user_message TEXT DEFAULT '', agent_role TEXT,
-          model TEXT, reasoning_effort TEXT);
+          model TEXT, reasoning_effort TEXT, originator TEXT);
         """, nil, nil, nil)
         for r in rows {
             let role = r.role.map { "'\($0)'" } ?? "NULL"
-            sqlite3_exec(db, "INSERT INTO threads VALUES ('\(r.id)', '\(r.rollout)', \(r.created), \(r.updated), '\(r.source)', '\(r.cwd)', 'Thread \(r.id)', 0, '', \(role), 'gpt-6', 'medium');", nil, nil, nil)
+            let parts = r.source.split(separator: "/", maxSplits: 1).map(String.init) // "source/originator"
+            let originator = parts.count > 1 ? "'\(parts[1])'" : "NULL"
+            sqlite3_exec(db, "INSERT INTO threads VALUES ('\(r.id)', '\(r.rollout)', \(r.created), \(r.updated), '\(parts[0])', '\(r.cwd)', 'Thread \(r.id)', 0, '', \(role), 'gpt-6', 'medium', \(originator));", nil, nil, nil)
         }
         sqlite3_close(db)
     }
@@ -383,9 +385,10 @@ struct CodexProviderTests {
         defer { withExtendedLifetime(home) {} }
         let r = home.write("r.jsonl", "")
         makeDB(home.path + "/.codex/state_5.sqlite", rows: [
-            (Self.ids.new, "/w", 1985, 1990, r, nil, "cli"),
+            (Self.ids.new, "/w", 1985, 1990, r, nil, "vscode/codex-tui"), // TUI via the app-server daemon (Codex ≥ 0.162)
             (Self.ids.old, "/w", 1001, 1500, r, nil, "cli"),
-            ("t-ide", "/w", 1986, 1999, r, nil, "vscode"),   // IDE thread: never claimed by the TUI
+            ("t-ide", "/w", 1986, 1999, r, nil, "vscode/Codex Desktop"), // desktop/IDE thread: never claimed by the TUI
+            ("t-exec", "/w", 1986, 1998, r, nil, "exec/codex_exec"),
             ("t-sub", "/w", 1987, 1995, r, "worker", "cli"), // sub-agent thread
         ])
         home.write(".codex/session_index.jsonl", "{\"id\":\"\(Self.ids.new)\",\"thread_name\":\"Named thread\"}\n")

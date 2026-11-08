@@ -200,7 +200,11 @@ public final class CodexProvider: AgentProvider {
         var sql = "SELECT \(wanted.filter(cols.contains).joined(separator: ", ")) FROM threads WHERE \(condition)"
         if cols.contains("archived") { sql += " AND archived = 0" }
         if cols.contains("agent_role") { sql += " AND (agent_role IS NULL OR agent_role = '')" }
-        if cols.contains("source") { sql += " AND source = 'cli'" }
+        // Codex ≥ 0.162 runs the TUI through the shared app-server daemon, which records `source = 'vscode'`;
+        // the originator still tells TUI threads apart from Codex Desktop/IDE and `exec` ones.
+        if cols.contains("source") {
+            sql += cols.contains("originator") ? " AND (source = 'cli' OR originator = 'codex-tui')" : " AND source = 'cli'"
+        }
         sql += " ORDER BY updated_at DESC LIMIT 16"
         guard let rows = SQLiteReader.query(db, sql, params) else {
             columns = nil

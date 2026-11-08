@@ -129,7 +129,9 @@ General principles:
   (`app-server`, `exec`, `mcp-server`, `login`, `proto`) and processes whose parent is also
   `codex` (the launcher re-execs itself).
 - **Thread matching**: query `~/.codex/state_5.sqlite` (read-only) table `threads` for rows with the
-  same `cwd`, updated after process start − 5 s, not archived, empty `agent_role`; newest first.
+  same `cwd`, updated after process start − 5 s, not archived, empty `agent_role`, and from the TUI
+  (`source = 'cli'`, or `originator = 'codex-tui'`: since 0.162 the TUI runs through the shared
+  app-server daemon and records `source = 'vscode'`, the same source Codex Desktop uses); newest first.
   Assign processes in start order, each taking the first unclaimed thread.
 - **Title**: `~/.codex/session_index.jsonl` `thread_name` → thread `title` → first user message.
 - **Rollout** (`rollout_path` from the thread row), `event_msg` payloads:
