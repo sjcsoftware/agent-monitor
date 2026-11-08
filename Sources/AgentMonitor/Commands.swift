@@ -22,7 +22,7 @@ enum Settings {
     private static let transparencyKey = "transparency"
 
     /// Matches the card's original frosted look.
-    static let defaultTransparency = 40
+    static let defaultTransparency = 20
 
     /// Hover card background transparency: 0 = solid, 100 = frosted glass (the backdrop is always blurred).
     static var transparency: Int {

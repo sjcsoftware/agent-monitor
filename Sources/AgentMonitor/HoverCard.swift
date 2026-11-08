@@ -267,9 +267,14 @@ final class CardController {
     }
 
     /// 0 = solid card; higher values thin the tint so more of the backdrop shows through. The backdrop is always
-    /// blurred and the tint never drops below 25 %, so even 100 stays readable (frosted glass, not clear).
+    /// blurred, so even 100 (no tint, blur only) stays readable. 50 leaves a 25 % tint.
     func setTransparency(_ value: Int) {
-        cardView.tintAlpha = 1 - 0.75 * CGFloat(min(max(value, 0), 100)) / 100
+        cardView.tintAlpha = Self.tintAlpha(transparency: value)
+    }
+
+    static func tintAlpha(transparency value: Int) -> CGFloat {
+        let t = CGFloat(min(max(value, 0), 100))
+        return t <= 50 ? 1 - 0.75 * t / 50 : 0.25 * (100 - t) / 50
     }
 
     func show(_ card: CardModel, anchor pill: PillView) {
