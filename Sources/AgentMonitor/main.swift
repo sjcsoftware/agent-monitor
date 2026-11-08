@@ -9,7 +9,7 @@ case "dump":
 case "hooks":
     exit(Commands.hooks(Array(args.dropFirst())))
 case "preview":
-    exit(Commands.preview(args.dropFirst().first ?? "preview.png"))
+    exit(Commands.preview(args.count > 1 ? args[1] : "preview.png", hovered: args.count > 2 ? Int(args[2]) ?? 0 : 0))
 case "version", "--version", "-v":
     print(AppInfo.version)
     exit(0)

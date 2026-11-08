@@ -16,9 +16,18 @@
   One tinted icon per live <b>Claude Code</b>, <b>Codex</b>, and <b>Copilot CLI</b> session. Hover for details, click to jump to its terminal.
 </p>
 
-<p align="center">
-  <img src="docs/images/preview.png" alt="Agent Monitor's strip in the menu bar with the hover card open" width="560">
-</p>
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/card-needs-you.png" alt="Hover card of a Claude Code session that needs a permission"></td>
+    <td width="33%"><img src="docs/images/card-finished.png" alt="Hover card of a finished Copilot CLI session"></td>
+    <td width="33%"><img src="docs/images/card-working.png" alt="Hover card of a working Codex session"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>🔴 <b>Needs you</b>: waiting on a permission or a question.</sub></td>
+    <td align="center"><sub>🟢 <b>Finished</b>: the last turn is done.</sub></td>
+    <td align="center"><sub>🟡 <b>Working</b>: mid-turn.</sub></td>
+  </tr>
+</table>
 
 ## Table of contents
 

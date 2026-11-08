@@ -52,24 +52,28 @@ enum Commands {
         }
     }
 
-    /// Renders the strip and a hover card with sample sessions to a PNG (used for README images).
-    static func preview(_ output: String) -> Int32 {
+    /// Renders the strip with the hover card of sample session `hovered` (0–2) to a PNG (README images).
+    static func preview(_ output: String, hovered: Int = 0) -> Int32 {
         _ = NSApplication.shared
         let now = Date().timeIntervalSince1970
         let samples = [
             Session(kind: .claude, pid: 1, cwd: "/Users/me/my-project", title: "Refactor the auth middleware",
                     model: "claude-opus-4-6", effort: "high", state: .input, waiting: "permission", since: now - 125,
                     started: now - 3000, active: 900, ctx: 84_000, ctxmax: 200_000, tin: 1_400_000, tout: 12_000),
-            Session(kind: .codex, pid: 2, state: .working, started: now - 2000),
-            Session(kind: .copilot, pid: 3, state: .done, started: now - 1000),
+            Session(kind: .codex, pid: 2, cwd: "/Users/me/api-server", title: "Add rate limiting to the API",
+                    model: "gpt-5-codex", effort: "medium", state: .working, since: now - 47,
+                    started: now - 2000, active: 700, ctx: 151_000, ctxmax: 272_000, tin: 2_300_000, tout: 31_000),
+            Session(kind: .copilot, pid: 3, cwd: "/Users/me/web-app", title: "Fix the flaky login test",
+                    model: "claude-sonnet-4.5", effort: "high", state: .done, since: now - 380,
+                    started: now - 1000, active: 420, ctx: 172_000, ctxmax: 200_000, tin: 980_000, tout: 8_400),
         ]
+        let index = min(max(hovered, 0), samples.count - 1)
         let cards = samples.map { CardModel(session: $0, now: now) }
 
         let scale: CGFloat = 2
         let pill: CGFloat = 28, gap: CGFloat = 6
-        let stripW = CGFloat(cards.count) * pill + CGFloat(cards.count - 1) * gap
         let margin: CGFloat = 24, barH: CGFloat = 34
-        let canvas = NSSize(width: CardView.width + margin * 2 + stripW, height: barH + 4 + CardView.height + margin)
+        let canvas = NSSize(width: CardView.width + margin * 2, height: barH + 4 + CardView.height + margin)
         let root = NSView(frame: NSRect(origin: .zero, size: canvas))
         root.wantsLayer = true
         root.layer?.backgroundColor = Theme.crust.cgColor
@@ -77,20 +81,20 @@ enum Commands {
         bar.wantsLayer = true
         bar.layer?.backgroundColor = Theme.base.cgColor
         root.addSubview(bar)
-        let stripX = (canvas.width - pill) / 2 // the hovered (first) pill sits in the middle
-        var firstPill: NSRect = .zero
+        let stripX = (canvas.width - pill) / 2 - CGFloat(index) * (pill + gap) // the hovered pill sits in the middle
+        var hoveredPill: NSRect = .zero
         for (i, c) in cards.enumerated() {
             let p = PillView(id: c.id, kind: c.kind, state: c.state)
             p.setSize(pill)
             p.frame = NSRect(x: stripX + CGFloat(i) * (pill + gap), y: (barH - pill) / 2, width: pill, height: pill)
             bar.addSubview(p)
-            if i == 0 { firstPill = p.frame }
+            if i == index { hoveredPill = p.frame }
         }
-        let cardView = CardView(frame: NSRect(x: firstPill.midX - CardView.width / 2,
+        let cardView = CardView(frame: NSRect(x: hoveredPill.midX - CardView.width / 2,
                                               y: canvas.height - barH - 4 - CardView.height,
                                               width: CardView.width, height: CardView.height))
         cardView.opaqueBackground = true
-        cardView.model = cards[0]
+        cardView.model = cards[index]
         root.addSubview(cardView)
         let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: -10_000, y: -10_000), size: canvas),
                               styleMask: .borderless, backing: .buffered, defer: false)
