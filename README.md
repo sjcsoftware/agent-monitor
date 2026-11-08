@@ -101,7 +101,7 @@ agent-monitor set background && agent-monitor set startup   # always on: now and
 | `agent-monitor unset startup` | Don't start at login |
 | `agent-monitor status` | Show what's running and configured |
 | `agent-monitor stop` | Quit any running instance |
-| `agent-monitor transparent 0`–`100` | Hover card background transparency: `0` opaque (default), `100` fully clear |
+| `agent-monitor transparent 0`–`100` | Hover card transparency: `0` solid, `100` frosted glass (default `40`). The backdrop is always blurred |
 | `agent-monitor dump` | Print every session as JSON |
 | `agent-monitor update` | Update to the latest release |
 | `agent-monitor uninstall` | Remove Agent Monitor |

@@ -182,7 +182,7 @@ ${B}Usage:${R} agent-monitor [command]
   ${B}status${R}              Show what's running and configured
   ${B}hooks${R} [install|uninstall|status]
                       Codex approval hooks (shows when Codex waits on you)
-  ${B}transparent${R} <0-100>  Hover card background transparency (0 opaque, 100 clear)
+  ${B}transparent${R} <0-100>  Hover card transparency (0 solid, 100 frosted; default 40)
   ${B}dump${R}                Print every session as JSON
   ${B}update${R}              Update to the latest release
   ${B}uninstall${R}           Remove Agent Monitor

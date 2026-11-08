@@ -21,9 +21,12 @@ enum Settings {
     static let changed = Notification.Name("com.sjcsoftware.agent-monitor.settings")
     private static let transparencyKey = "transparency"
 
-    /// Hover card background transparency: 0 = opaque (default), 100 = fully clear.
+    /// Matches the card's original frosted look.
+    static let defaultTransparency = 40
+
+    /// Hover card background transparency: 0 = solid, 100 = frosted glass (the backdrop is always blurred).
     static var transparency: Int {
-        get { min(max(UserDefaults.standard.integer(forKey: transparencyKey), 0), 100) }
+        get { min(max(UserDefaults.standard.object(forKey: transparencyKey) as? Int ?? defaultTransparency, 0), 100) }
         set {
             UserDefaults.standard.set(min(max(newValue, 0), 100), forKey: transparencyKey)
             UserDefaults.standard.synchronize()
@@ -46,7 +49,7 @@ enum Commands {
             return 0
         }
         guard args.count == 1, let value = Int(arg), (0...100).contains(value) else {
-            fputs("usage: agent-monitor transparent <0-100>   (0 = opaque, 100 = fully transparent)\n", stderr)
+            fputs("usage: agent-monitor transparent <0-100>   (0 = solid, 100 = most transparent; default \(Settings.defaultTransparency))\n", stderr)
             return 2
         }
         Settings.transparency = value

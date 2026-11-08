@@ -50,10 +50,26 @@ final class CardView: NSView {
     private let fill = CALayer()
     /// Draws an opaque background (for offscreen previews where there's no blur behind).
     var opaqueBackground = false
-    /// Scales the card's background fill (1 = normal, 0 = clear); content is unaffected.
-    var backgroundOpacity: CGFloat = 1 {
-        didSet { if backgroundOpacity != oldValue { needsDisplay = true } }
+    /// Alpha of the tint over the blurred backdrop (1 = solid). Below the default, secondary text is lifted
+    /// toward the primary text colour and all text gets a soft shadow, so it stays legible over a bright backdrop.
+    var tintAlpha: CGFloat = Theme.cardFill.alphaComponent {
+        didSet {
+            guard tintAlpha != oldValue else { return }
+            legibility = min(max((Theme.cardFill.alphaComponent - tintAlpha) / 0.45, 0), 1)
+            if legibility > 0 {
+                let shadow = NSShadow()
+                shadow.shadowColor = NSColor.black.withAlphaComponent(0.5 * legibility)
+                shadow.shadowBlurRadius = 2
+                shadow.shadowOffset = .zero
+                textShadow = shadow
+            } else {
+                textShadow = nil
+            }
+            needsDisplay = true
+        }
     }
+    private var legibility: CGFloat = 0
+    private var textShadow: NSShadow?
 
     var model: CardModel? {
         didSet {
@@ -103,10 +119,10 @@ final class CardView: NSView {
         guard let m = model else { return }
         let card = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 16, yRadius: 16)
         if opaqueBackground {
-            Theme.hex(0x111A30, backgroundOpacity).setFill()
+            Theme.hex(0x111A30).setFill()
             card.fill()
         }
-        Theme.cardFill.withAlphaComponent(Theme.cardFill.alphaComponent * backgroundOpacity).setFill()
+        Theme.cardFill.withAlphaComponent(tintAlpha).setFill()
         card.fill()
         Theme.cardBorder.setStroke()
         card.lineWidth = 1
@@ -199,7 +215,16 @@ final class CardView: NSView {
         para.alignment = align
         para.lineBreakMode = .byTruncatingTail
         let m = NSMutableAttributedString(attributedString: s)
-        m.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: m.length))
+        let all = NSRange(location: 0, length: m.length)
+        m.addAttribute(.paragraphStyle, value: para, range: all)
+        if legibility > 0 {
+            m.enumerateAttribute(.foregroundColor, in: all) { value, range, _ in
+                guard let color = value as? NSColor, color == Theme.muted || color == Theme.subtext,
+                      let lifted = color.blended(withFraction: 0.65 * legibility, of: Theme.text) else { return }
+                m.addAttribute(.foregroundColor, value: lifted, range: range)
+            }
+        }
+        if let textShadow { m.addAttribute(.shadow, value: textShadow, range: all) }
         m.draw(with: r, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 }
@@ -208,7 +233,6 @@ final class CardView: NSView {
 final class CardController {
     private let panel: NSPanel
     private let cardView: CardView
-    private let blur: NSVisualEffectView
     private(set) var shownId: String?
     private weak var anchor: PillView?
 
@@ -227,7 +251,7 @@ final class CardController {
         panel.animationBehavior = .none
 
         let root = NSView(frame: NSRect(origin: .zero, size: size))
-        blur = NSVisualEffectView(frame: root.bounds)
+        let blur = NSVisualEffectView(frame: root.bounds)
         blur.material = .hudWindow
         blur.blendingMode = .behindWindow
         blur.state = .active
@@ -242,12 +266,10 @@ final class CardController {
         setTransparency(Settings.transparency)
     }
 
-    /// 0 = normal blurred background, 100 = fully clear (text, chips and tiles stay as they are).
+    /// 0 = solid card; higher values thin the tint so more of the backdrop shows through. The backdrop is always
+    /// blurred and the tint never drops below 25 %, so even 100 stays readable (frosted glass, not clear).
     func setTransparency(_ value: Int) {
-        let opacity = 1 - CGFloat(min(max(value, 0), 100)) / 100
-        blur.alphaValue = opacity
-        blur.isHidden = opacity == 0
-        cardView.backgroundOpacity = opacity
+        cardView.tintAlpha = 1 - 0.75 * CGFloat(min(max(value, 0), 100)) / 100
     }
 
     func show(_ card: CardModel, anchor pill: PillView) {
