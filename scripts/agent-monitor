@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# agent-monitor — control Agent Monitor from the terminal.
+# Lives inside AgentMonitor.app/Contents/Resources and is symlinked onto your PATH by install.sh.
+set -euo pipefail
+
+REPO="sjcsoftware/agent-monitor"
+INSTALL_URL="https://raw.githubusercontent.com/$REPO/main/install.sh"
+LABEL="com.sjcsoftware.agent-monitor"
+BG_LABEL="$LABEL.background"
+STARTUP_LABEL="$LABEL.startup"
+SUPPORT="$HOME/Library/Application Support/AgentMonitor"
+BG_PLIST="$SUPPORT/$BG_LABEL.plist"
+STARTUP_PLIST="$HOME/Library/LaunchAgents/$STARTUP_LABEL.plist"
+DOMAIN="gui/$(id -u)"
+
+# Resolve the app bundle this script belongs to (following the PATH symlink).
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  target="$(readlink "$self")"
+  case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
+done
+APP="$(cd "$(dirname "$self")/../.." 2>/dev/null && pwd || true)"
+if [ ! -x "$APP/Contents/MacOS/AgentMonitor" ]; then
+  for candidate in /Applications/AgentMonitor.app "$HOME/Applications/AgentMonitor.app"; do
+    if [ -x "$candidate/Contents/MacOS/AgentMonitor" ]; then APP="$candidate"; break; fi
+  done
+fi
+BIN="$APP/Contents/MacOS/AgentMonitor"
+if [ ! -x "$BIN" ]; then
+  echo "agent-monitor: AgentMonitor.app not found. Reinstall with:" >&2
+  echo "  curl -fsSL $INSTALL_URL | bash" >&2
+  exit 1
+fi
+
+if [ -t 1 ]; then B=$'\033[1m'; D=$'\033[2m'; G=$'\033[32m'; R=$'\033[0m'; else B=""; D=""; G=""; R=""; fi
+ok() { printf '%s✓%s %s\n' "$G" "$R" "$*"; }
+hint() { printf '%s%s%s\n' "$D" "$*" "$R"; }
+
+version() { /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist" 2>/dev/null || echo unknown; }
+pids() { pgrep -f "^$BIN\$" 2>/dev/null || true; }
+is_running() { [ -n "$(pids)" ]; }
+bg_loaded() { launchctl print "$DOMAIN/$BG_LABEL" >/dev/null 2>&1; }
+startup_set() { [ -f "$STARTUP_PLIST" ]; }
+
+# A launchd agent that runs the app and restarts it only if it crashes.
+write_plist() {
+  mkdir -p "$(dirname "$1")"
+  cat > "$1" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$2</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$BIN</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+</dict>
+</plist>
+EOF
+}
+
+# SIGTERM makes the app exit 0, so launchd's crash-only KeepAlive leaves it stopped.
+stop_running() {
+  local p
+  p="$(pids)"
+  [ -z "$p" ] && return 0
+  # shellcheck disable=SC2086
+  kill -TERM $p 2>/dev/null || true
+  for _ in $(seq 1 30); do
+    is_running || return 0
+    sleep 0.1
+  done
+  # shellcheck disable=SC2046
+  kill -KILL $(pids) 2>/dev/null || true
+}
+
+cmd_run() {
+  if is_running; then
+    if bg_loaded; then ok "Agent Monitor is already running in the background."; else ok "Agent Monitor is already running."; fi
+    return 0
+  fi
+  echo "${B}Agent Monitor${R} is running. Icons appear in the menu bar while agent sessions are open."
+  hint "Ctrl-C quits. To keep it running after this terminal closes: agent-monitor set background"
+  exec "$BIN"
+}
+
+set_background() {
+  bg_loaded && launchctl bootout "$DOMAIN/$BG_LABEL" 2>/dev/null || true
+  stop_running
+  write_plist "$BG_PLIST" "$BG_LABEL"
+  launchctl bootstrap "$DOMAIN" "$BG_PLIST"
+  for _ in $(seq 1 30); do is_running && break; sleep 0.1; done
+  ok "Agent Monitor is running in the background."
+  startup_set || hint "To also start it at login: agent-monitor set startup"
+}
+
+unset_background() {
+  bg_loaded && launchctl bootout "$DOMAIN/$BG_LABEL" 2>/dev/null || true
+  rm -f "$BG_PLIST"
+  stop_running
+  ok "Agent Monitor stopped and no longer runs in the background."
+}
+
+set_startup() {
+  write_plist "$STARTUP_PLIST" "$STARTUP_LABEL"
+  launchctl enable "$DOMAIN/$STARTUP_LABEL" 2>/dev/null || true
+  ok "Agent Monitor will start when you log in."
+  is_running || hint "To start it now as well: agent-monitor set background"
+}
+
+unset_startup() {
+  rm -f "$STARTUP_PLIST"
+  ok "Agent Monitor will no longer start when you log in."
+}
+
+cmd_status() {
+  local p
+  p="$(pids | tr '\n' ' ' | sed 's/ $//')"
+  echo "${B}Agent Monitor $(version)${R}  ${D}$APP${R}"
+  printf '  running      %s\n' "$([ -n "$p" ] && echo "yes (pid $p)" || echo no)"
+  printf '  background   %s\n' "$(bg_loaded && echo on || echo off)"
+  printf '  startup      %s\n' "$(startup_set && echo on || echo off)"
+  printf '  codex hooks  %s\n' "$("$BIN" hooks status 2>/dev/null || echo unknown)"
+}
+
+cmd_update() {
+  local current latest
+  current="$(version)"
+  latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null | sed -nE 's#.*/tag/v?([^/]+)$#\1#p')" || latest=""
+  if [ -z "$latest" ]; then
+    echo "agent-monitor: couldn't check for updates (offline, or no releases yet)." >&2
+    exit 1
+  fi
+  if [ "$latest" = "$current" ] && [ "${1:-}" != "--force" ]; then
+    ok "Agent Monitor $current is up to date."
+    return 0
+  fi
+  echo "Updating Agent Monitor $current → $latest"
+  curl -fsSL "$INSTALL_URL" | AGENT_MONITOR_APP_DIR="$(dirname "$APP")" AGENT_MONITOR_UPDATE=1 bash
+}
+
+cmd_uninstall() {
+  bg_loaded && launchctl bootout "$DOMAIN/$BG_LABEL" 2>/dev/null || true
+  rm -f "$BG_PLIST" "$STARTUP_PLIST"
+  stop_running
+  "$BIN" hooks uninstall >/dev/null 2>&1 || true
+  local link
+  link="$(command -v agent-monitor 2>/dev/null || true)"
+  if [ -n "$link" ] && [ -L "$link" ]; then rm -f "$link"; fi
+  rm -rf "$SUPPORT"
+  defaults delete "$LABEL" >/dev/null 2>&1 || true
+  rm -rf "$APP"
+  ok "Agent Monitor has been removed."
+}
+
+usage() {
+  cat <<EOF
+${B}agent-monitor${R} $(version) — see which coding agents need you, from the menu bar.
+
+${B}Usage:${R} agent-monitor [command]
+
+  ${B}(none)${R}              Run in this terminal (Ctrl-C quits)
+  ${B}set background${R}      Run in the background, detached from the terminal
+  ${B}unset background${R}    Stop running in the background
+  ${B}set startup${R}         Start automatically at login
+  ${B}unset startup${R}       Don't start at login
+  ${B}stop${R}                Quit any running instance
+  ${B}status${R}              Show what's running and configured
+  ${B}hooks${R} [install|uninstall|status]
+                      Codex approval hooks (shows when Codex waits on you)
+  ${B}dump${R}                Print every session as JSON
+  ${B}update${R}              Update to the latest release
+  ${B}uninstall${R}           Remove Agent Monitor
+  ${B}version${R}             Print the installed version
+EOF
+}
+
+bad_target() {
+  echo "usage: agent-monitor $1 [startup|background]" >&2
+  exit 2
+}
+
+case "${1:-run}" in
+  run) cmd_run ;;
+  set)
+    case "${2:-}" in
+      startup) set_startup ;;
+      background) set_background ;;
+      *) bad_target set ;;
+    esac ;;
+  unset)
+    case "${2:-}" in
+      startup) unset_startup ;;
+      background) unset_background ;;
+      *) bad_target unset ;;
+    esac ;;
+  stop) stop_running; ok "Agent Monitor stopped." ;;
+  status) cmd_status ;;
+  hooks) shift; exec "$BIN" hooks "$@" ;;
+  dump) exec "$BIN" dump ;;
+  update) shift; cmd_update "$@" ;;
+  uninstall) cmd_uninstall ;;
+  version | --version | -v) version ;;
+  help | --help | -h) usage ;;
+  *) usage >&2; exit 2 ;;
+esac
