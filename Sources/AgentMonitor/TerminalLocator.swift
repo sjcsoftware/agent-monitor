@@ -39,10 +39,8 @@ final class TerminalLocator {
         if let tmux = target.tmux { selectTmuxPane(tmux) }
         let bundle = target.app.bundleIdentifier ?? ""
         switch bundle {
-        case "com.apple.Terminal":
-            if let tty = target.tty, runAppleScript(Self.terminalScript(tty: tty)) { return }
-        case "com.googlecode.iterm2":
-            if let tty = target.tty, runAppleScript(Self.itermScript(tty: tty)) { return }
+        case "com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty":
+            if let tty = target.tty, let script = Self.focusScript(bundle: bundle, tty: tty), runAppleScript(script) { return }
         case "net.kovidgoyal.kitty":
             if let id = target.env["KITTY_WINDOW_ID"], let socket = target.env["KITTY_LISTEN_ON"] {
                 run(bundleBinary(target.app, "kitty"), ["@", "--to", socket, "focus-window", "--match", "id:\(id)"])
@@ -151,43 +149,55 @@ final class TerminalLocator {
         return error == nil && result?.booleanValue == true
     }
 
-    private static func terminalScript(tty: String) -> String {
-        """
-        tell application "Terminal"
-            repeat with w in windows
-                repeat with t in tabs of w
-                    if tty of t is "\(tty)" then
-                        set selected of t to true
-                        set index of w to 1
-                        activate
-                        return true
-                    end if
-                end repeat
-            end repeat
-        end tell
-        return false
-        """
-    }
-
-    private static func itermScript(tty: String) -> String {
-        """
-        tell application "iTerm2"
-            repeat with w in windows
-                repeat with t in tabs of w
-                    repeat with s in sessions of t
-                        if tty of s is "\(tty)" then
-                            select w
-                            select t
-                            select s
+    /// AppleScript that selects the tab/split whose tty matches and brings its window to the front.
+    static func focusScript(bundle: String, tty: String) -> String? {
+        guard tty.hasPrefix("/dev/"), !tty.contains("\"") else { return nil }
+        let body: String
+        switch bundle {
+        case "com.apple.Terminal":
+            body = """
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        if tty of t is "\(tty)" then
+                            set selected of t to true
+                            set index of w to 1
                             activate
                             return true
                         end if
                     end repeat
                 end repeat
-            end repeat
-        end tell
-        return false
-        """
+            """
+        case "com.googlecode.iterm2":
+            body = """
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        repeat with s in sessions of t
+                            if tty of s is "\(tty)" then
+                                select w
+                                select t
+                                select s
+                                activate
+                                return true
+                            end if
+                        end repeat
+                    end repeat
+                end repeat
+            """
+        case "com.mitchellh.ghostty":
+            // Ghostty 1.3+ scripting: `focus` selects the split/tab and raises its window.
+            body = """
+                repeat with t in terminals
+                    if tty of t is "\(tty)" then
+                        focus t
+                        activate
+                        return true
+                    end if
+                end repeat
+            """
+        default:
+            return nil
+        }
+        return "tell application id \"\(bundle)\"\n\(body)\nend tell\nreturn false"
     }
 
     private func bundleBinary(_ app: NSRunningApplication, _ name: String) -> String {

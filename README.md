@@ -54,7 +54,7 @@
 
 ### Click to jump
 
-- **Terminal** and **iTerm2** select the exact tab, **tmux** switches to the pane, and **kitty** and **WezTerm** focus the window.
+- **Ghostty**, **Terminal**, and **iTerm2** select the exact tab or split, **tmux** switches to the pane, and **kitty** and **WezTerm** focus the window.
 - Any other terminal is brought to the front.
 
 ### Native and light
@@ -104,7 +104,7 @@ In the menu bar:
 | Click an icon | Bring its terminal window (or tab) to the front |
 | Right-click the strip | Toggle Codex approval hooks, or quit |
 
-> The first click on a Terminal or iTerm2 session asks for permission to control that app, so Agent Monitor can select the exact tab. For other terminals, granting **Accessibility** lets it raise the exact window.
+> The first click on a Ghostty, Terminal, or iTerm2 session asks for permission to control that app, so Agent Monitor can select the exact tab. For other terminals, granting **Accessibility** lets it raise the exact window.
 
 ## Codex approvals
 

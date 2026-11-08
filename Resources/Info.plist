@@ -33,6 +33,6 @@
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 chaseungjoon. GPL-3.0.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Agent Monitor asks Terminal or iTerm2 to bring the exact tab running an agent session to the front when you click its icon.</string>
+    <string>Agent Monitor asks Ghostty, Terminal or iTerm2 to bring the exact tab running an agent session to the front when you click its icon.</string>
 </dict>
 </plist>
