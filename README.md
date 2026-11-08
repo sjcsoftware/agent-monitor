@@ -124,6 +124,7 @@ agent-monitor hooks install     # or accept the one-time offer on first launch
 ```
 
 - This adds one entry per event to `~/.codex/hooks.json` that points at a helper inside the app. Your existing hooks are kept.
+- If you move or delete the app, the hook does nothing instead of failing Codex.
 - The next time Codex starts, it asks you to trust the new hooks. Choose **Trust**.
 - To remove them, run `agent-monitor hooks uninstall`.
 

@@ -12,7 +12,7 @@ enum AppInfo {
     static var hookCommand: String {
         let exe = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
         let path = exe.resolvingSymlinksInPath().deletingLastPathComponent().appendingPathComponent(CodexHooks.helperName).path
-        return path.contains(" ") ? "'\(path)'" : path
+        return CodexHooks.command(helper: path)
     }
 }
 

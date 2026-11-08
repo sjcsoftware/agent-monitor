@@ -37,6 +37,15 @@ public enum CodexHooks {
         }
     }
 
+    /// The shell command registered for every event. Codex runs it through a shell, so a bare path that
+    /// no longer exists (app moved or deleted) fails every hook with exit 127; this is a no-op instead.
+    public static func command(helper path: String) -> String {
+        let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-+@%")
+        let quoted = path.unicodeScalars.allSatisfy(safe.contains)
+            ? path : "'" + path.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+        return "test -x \(quoted) && \(quoted) || true"
+    }
+
     public static func hooksFile(home: String = Paths.home) -> String {
         (home as NSString).appendingPathComponent(".codex/hooks.json")
     }

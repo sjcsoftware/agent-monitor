@@ -141,7 +141,9 @@ General principles:
 - **Approval prompts** are not in the rollout. Two sources, either is enough:
   1. **Lifecycle hooks** (`~/.codex/hooks.json`): register a tiny hook command for every event that
      writes `{state, event, ts}` to `<per-user runtime dir>/agents/codex/<session_id>.json` (atomic
-     write, never blocks, prints nothing, always exits 0, deletes the file on `SessionEnd`). Mapping:
+     write, never blocks, prints nothing, always exits 0, deletes the file on `SessionEnd`). The registered
+     command is `test -x <helper> && <helper> || true`, so it is a no-op if the app is moved or deleted
+     (Codex runs hooks through a shell; a missing path would exit 127). Mapping:
      `SessionStart`→ready, `UserPromptSubmit`/`PostToolUse`/`SubagentStart`→working,
      `PreToolUse`→input if the tool is a question tool (`request_user_input`, `ask_user`,
      `AskUserQuestion`) else working, `PermissionRequest`→input, `Stop`/`Interrupt`→done.

@@ -497,6 +497,27 @@ struct CodexHooksTests {
         #expect(!CodexHooks.isInstalled(path: path))
     }
 
+    @Test func commandIsNoOpWhenHelperIsMissing() throws {
+        func sh(_ command: String) throws -> Int32 {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = ["-c", command]
+            p.standardInput = FileHandle.nullDevice
+            try p.run()
+            p.waitUntilExit()
+            return p.terminationStatus
+        }
+        let dir = TempDir()
+        let helper = dir.path + "/it's an app/agent-monitor-hook"
+        #expect(try sh(CodexHooks.command(helper: helper)) == 0) // a bare missing path exits 127
+
+        dir.write("it's an app/agent-monitor-hook", "#!/bin/sh\ntouch \"$(dirname \"$0\")/ran\"\n")
+        chmod(helper, 0o755)
+        #expect(try sh(CodexHooks.command(helper: helper)) == 0)
+        #expect(FileManager.default.fileExists(atPath: dir.path + "/it's an app/ran"))
+        #expect(CodexHooks.command(helper: "/A/agent-monitor-hook") == "test -x /A/agent-monitor-hook && /A/agent-monitor-hook || true")
+    }
+
     @Test func refusesToClobberInvalidJSON() {
         let dir = TempDir()
         let path = dir.write("hooks.json", "{ not json")
