@@ -9,9 +9,9 @@ final class FakeProcs: ProcessInspecting {
     struct Proc { var info: ProcInfo; var args: [String]; var path: String?; var cwd: String?; var files: [String] = [] }
     var table: [Int32: Proc] = [:]
 
-    func add(_ pid: Int32, name: String, ppid: Int32 = 1, tty: Bool = true, started: Double = 1000,
+    func add(_ pid: Int32, name: String, ppid: Int32 = 1, tty: Bool = true, foreground: Bool = true, started: Double = 1000,
              args: [String]? = nil, path: String? = nil, cwd: String? = nil, files: [String] = []) {
-        table[pid] = Proc(info: ProcInfo(pid: pid, ppid: ppid, name: name, hasTTY: tty, started: started),
+        table[pid] = Proc(info: ProcInfo(pid: pid, ppid: ppid, name: name, hasTTY: tty, isForeground: foreground, started: started),
                           args: args ?? [name], path: path, cwd: cwd, files: files)
     }
 
@@ -248,6 +248,18 @@ struct ClaudeProviderTests {
         procs.add(42, name: "claude", tty: false)
         #expect(ClaudeProvider(home: home.path, procs: procs).sessions(now: 0).isEmpty)
     }
+
+    @Test func hidesSuspendedSessionUntilResumed() {
+        let home = TempDir()
+        defer { withExtendedLifetime(home) {} }
+        home.write(".claude/sessions/42.json", #"{"pid":42,"sessionId":"s1","cwd":"/w","kind":"interactive","status":"busy"}"#)
+        let procs = FakeProcs()
+        procs.add(42, name: "claude", foreground: false)
+        let p = ClaudeProvider(home: home.path, procs: procs)
+        #expect(p.sessions(now: 0).isEmpty)
+        procs.add(42, name: "claude")
+        #expect(p.sessions(now: 0).map(\.state) == [.working])
+    }
 }
 
 // MARK: - Copilot
@@ -276,6 +288,20 @@ struct CopilotProviderTests {
     }
 
     var base: Double { Time.parse(t0)! }
+
+    @Test func hidesSuspendedSessionUntilResumed() throws {
+        let home = TempDir()
+        defer { withExtendedLifetime(home) {} }
+        home.write(".copilot/session-state/abc/inuse.77.lock", "77")
+        home.write(".copilot/session-state/abc/workspace.yaml", "id: abc\ncwd: /w\n")
+        home.write(".copilot/session-state/abc/events.jsonl", jsonl([event("session.start", 0)]))
+        let procs = FakeProcs()
+        procs.add(77, name: "copilot", foreground: false)
+        let p = CopilotProvider(home: home.path, procs: procs)
+        #expect(p.sessions(now: base + 1).isEmpty)
+        procs.add(77, name: "copilot")
+        #expect(p.sessions(now: base + 1).map(\.pid) == [77])
+    }
 
     @Test func turnEndGraceRule() throws {
         let (home, p) = setup([
@@ -399,6 +425,7 @@ struct CodexProviderTests {
         procs.add(12, name: "codex", ppid: 11, started: 1981, cwd: "/w")             // re-exec child
         procs.add(13, name: "codex", started: 1000, args: ["codex", "exec", "hi"], cwd: "/w")
         procs.add(14, name: "codex", tty: false, started: 1000, cwd: "/w")
+        procs.add(16, name: "codex", foreground: false, started: 1000, cwd: "/w")     // suspended with Ctrl+Z
         procs.add(15, name: "codex", started: 2500, cwd: "/w")                        // no thread yet
         let p = CodexProvider(home: home.path, procs: procs, hookDir: home.path + "/hooks")
         let sessions = p.sessions(now: 2600)

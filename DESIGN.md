@@ -236,7 +236,7 @@ existing user hooks.
 - Collection runs on a background queue on a 1 s timer; publish to the UI on the main thread.
 - Only read appended bytes; substring-filter lines before JSON decoding.
 - Database access: read-only, short busy timeout, connection opened per tick (the agent owns the DB).
-- Process inspection (alive, has controlling terminal, executable name, argv, cwd, start time,
+- Process inspection (alive, has controlling terminal, foreground/stopped state, executable name, argv, cwd, start time,
   parent pid) via the platform's process APIs — avoid spawning shell commands per tick.
 - Target: negligible CPU when idle; no growth in memory over long uptimes.
 

@@ -9,15 +9,18 @@ public struct ProcInfo: Equatable, Sendable {
     /// Has a controlling terminal.
     public var hasTTY: Bool
     public var tdev: UInt32
+    /// Running in its terminal's foreground process group; false for a suspended (Ctrl+Z) or background job.
+    public var isForeground: Bool
     /// Process start, epoch seconds.
     public var started: Double
 
-    public init(pid: Int32, ppid: Int32, name: String, hasTTY: Bool, tdev: UInt32 = 0, started: Double) {
+    public init(pid: Int32, ppid: Int32, name: String, hasTTY: Bool, tdev: UInt32 = 0, isForeground: Bool = true, started: Double) {
         self.pid = pid
         self.ppid = ppid
         self.name = name
         self.hasTTY = hasTTY
         self.tdev = tdev
+        self.isForeground = isForeground
         self.started = started
     }
 }
@@ -81,6 +84,7 @@ public final class SystemProcesses: ProcessInspecting {
             name: name,
             hasTTY: bi.e_tdev != noDevice && bi.e_tdev != 0,
             tdev: bi.e_tdev,
+            isForeground: bi.pbi_status != 4 /* SSTOP */ && bi.pbi_pgid == bi.e_tpgid,
             started: Double(bi.pbi_start_tvsec) + Double(bi.pbi_start_tvusec) / 1_000_000
         )
     }
@@ -190,6 +194,7 @@ public final class SystemProcesses: ProcessInspecting {
             name: cString(kp.kp_proc.p_comm),
             hasTTY: tdev != UInt32.max && tdev != 0,
             tdev: tdev,
+            isForeground: kp.kp_proc.p_stat != 4 /* SSTOP */ && kp.kp_eproc.e_pgid == kp.kp_eproc.e_tpgid,
             started: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
         )
     }

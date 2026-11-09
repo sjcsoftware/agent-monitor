@@ -175,7 +175,7 @@ public final class CopilotProvider: AgentProvider {
 
         var result: [Session] = []
         for (pid, candidates) in byPid {
-            guard let info = procs.info(pid), info.hasTTY, procs.looksLike(pid, tool: "copilot") else { continue }
+            guard let info = procs.info(pid), info.hasTTY, info.isForeground, procs.looksLike(pid, tool: "copilot") else { continue }
             let args = procs.arguments(pid).dropFirst()
             if args.contains(where: { $0 == "-p" || $0 == "--prompt" || $0.hasPrefix("--prompt=") || $0 == "--acp" }) { continue }
             let dir = candidates.max { (fileMTime("\($0)/events.jsonl") ?? 0) < (fileMTime("\($1)/events.jsonl") ?? 0) }!

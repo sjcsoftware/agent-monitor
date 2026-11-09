@@ -149,7 +149,7 @@ public final class CodexProvider: AgentProvider {
     func discover() -> [ProcInfo] {
         var found: [ProcInfo] = []
         for pid in procs.allPids() {
-            guard let info = procs.info(pid), Self.isCodexName(info.name), info.hasTTY else { continue }
+            guard let info = procs.info(pid), Self.isCodexName(info.name), info.hasTTY, info.isForeground else { continue }
             if let parent = procs.info(info.ppid), Self.isCodexName(parent.name) { continue }
             if procs.arguments(pid).dropFirst().contains(where: Self.excludedSubcommands.contains) { continue }
             found.append(info)

@@ -101,8 +101,9 @@ General principles:
 - **Transcripts / event logs are append-only JSONL**: remember the byte offset and only parse new
   complete lines; keep a trailing partial line buffered. If the file shrinks, reset and re-read.
 - **Pre-filter lines by substring** before JSON-parsing — logs can be large.
-- A session is only shown if its **process is alive, attached to a terminal, and is the expected
-  executable**. Stale state files left by crashed processes must be ignored.
+- A session is only shown if its **process is alive, in the foreground of a terminal, and is the
+  expected executable**. Suspended (Ctrl+Z) and background jobs are hidden until they return to the
+  foreground. Stale state files left by crashed processes must be ignored.
 - **Each agent is read in isolation**: an error reading one agent must never break the others or the app.
 - Paths below are relative to the user's home directory.
 

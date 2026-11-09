@@ -105,7 +105,7 @@ public final class ClaudeProvider: AgentProvider {
             let pid = Int32(truncatingIfNeeded: filePid != 0 ? filePid : Int(name.dropLast(5)) ?? 0)
             guard pid > 0,
                   (file["kind"] as? String ?? "interactive") == "interactive",
-                  let info = procs.info(pid), info.hasTTY,
+                  let info = procs.info(pid), info.hasTTY, info.isForeground,
                   procs.looksLike(pid, tool: "claude")
             else { continue }
             livePids.insert(pid)
