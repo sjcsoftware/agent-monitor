@@ -22,9 +22,10 @@ default:
     exit(2)
 }
 
-// One instance per user session.
-if let id = Bundle.main.bundleIdentifier,
-   NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0.processIdentifier != getpid() }) {
+// One instance per user, however many login items or launch agents start us at once. An unbundled
+// development build skips this so it can run beside the installed app. Exiting 0 keeps launchd's
+// crash-only KeepAlive from relaunching the loser.
+if Bundle.main.bundleIdentifier != nil, InstanceLock.acquire(at: InstanceLock.defaultPath) == .alreadyHeld {
     fputs("Agent Monitor is already running.\n", stderr)
     exit(0)
 }

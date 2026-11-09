@@ -586,4 +586,51 @@ struct StoreTests {
         let arc = SVGPath.parse("M0 0A5 5 0 0 1 10 0").boundingBoxOfPath
         #expect(abs(arc.width - 10) < 0.01 && abs(arc.height - 5) < 0.01)
     }
+
+    private func lockPath() -> String {
+        NSTemporaryDirectory() + "agent-monitor-tests-\(UUID().uuidString)/nested/instance.lock"
+    }
+
+    @Test func instanceLockIsExclusiveUntilReleased() throws {
+        let path = lockPath()
+        defer { try? FileManager.default.removeItem(atPath: ((path as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent) }
+        guard case .acquired(let fd) = InstanceLock.acquire(at: path) else {
+            Issue.record("first acquire should win")
+            return
+        }
+        #expect(InstanceLock.acquire(at: path) == .alreadyHeld)
+        close(fd)
+        guard case .acquired(let again) = InstanceLock.acquire(at: path) else {
+            Issue.record("a released lock should be free")
+            return
+        }
+        close(again)
+    }
+
+    @Test func instanceLockHasOneWinnerUnderSimultaneousLaunches() {
+        let path = lockPath()
+        defer { try? FileManager.default.removeItem(atPath: ((path as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent) }
+        let outcomes = NSMutableArray()
+        DispatchQueue.concurrentPerform(iterations: 64) { _ in
+            let outcome = InstanceLock.acquire(at: path)
+            outcomes.synchronized { outcomes.add(outcome) }
+        }
+        let results = outcomes.compactMap { $0 as? InstanceLock.Outcome }
+        let winners = results.filter { if case .acquired = $0 { return true } else { return false } }
+        #expect(results.count == 64 && winners.count == 1)
+        #expect(results.filter { $0 == .alreadyHeld }.count == 63)
+        if case .acquired(let fd)? = winners.first { close(fd) }
+    }
+
+    @Test func instanceLockReportsAnUnusablePath() {
+        #expect(InstanceLock.acquire(at: "/dev/null/instance.lock") == .unavailable(errno: ENOTDIR))
+    }
+}
+
+private extension NSMutableArray {
+    func synchronized(_ body: () -> Void) {
+        objc_sync_enter(self)
+        defer { objc_sync_exit(self) }
+        body()
+    }
 }
