@@ -10,6 +10,7 @@ public final class CodexProvider: AgentProvider {
     private let windowTitles: ((Int32) -> [String])?
     private let refreshTitles: (() -> Void)?
     private var rollouts: [Int32: Rollout] = [:]
+    private var lastThread: [Int32: SQLiteReader.Row] = [:]
     private var columns: Set<String>?
     private let config = FileCache<(model: String?, effort: String?)> { CodexProvider.parseConfig($0) }
     private let index = FileCache<[String: String]> { CodexProvider.parseIndex($0) }
@@ -137,11 +138,20 @@ public final class CodexProvider: AgentProvider {
                 claimed.insert(id)
             }
         }
+        // 3. Sticky: a process that matched a thread before keeps it when this poll can't see one (a busy database,
+        //    a rollout momentarily closed), instead of blinking to "ready" until the next poll.
+        for info in candidates where assigned[info.pid] == nil {
+            if let row = lastThread[info.pid], let id = row["id"], !claimed.contains(id) {
+                assigned[info.pid] = row
+                claimed.insert(id)
+            }
+        }
         let result = candidates.map { info in
             session(info: info, cwd: cwds[info.pid] ?? "", thread: assigned[info.pid], names: names, defaults: defaults, now: now)
         }
         let live = Set(candidates.map(\.pid))
         rollouts = rollouts.filter { live.contains($0.key) }
+        lastThread = assigned.filter { live.contains($0.key) }
         return result
     }
 
@@ -230,7 +240,11 @@ public final class CodexProvider: AgentProvider {
         if let id = thread?["id"], let hook = CodexHooks.read(threadId: id, dir: hookDir),
            hook.ts >= (r?.stateTs ?? 0) - 1,
            hook.ts >= info.started - 1, // older records belong to an earlier run of the thread
-           let hookState = CodexHooks.state(of: hook) {
+           let hookState = CodexHooks.state(of: hook),
+           // SessionStart also fires when the TUI reconnects to the app-server and resumes its thread (a dropped
+           // connection, an overloaded backend); that doesn't end a turn this process started. A turn left open
+           // by an earlier process (`codex resume` after a crash) is still cleared.
+           !(hookState == .ready && (r?.turnStart).map { $0 >= info.started - 1 } == true) {
             if hookState != state { since = hook.ts }
             state = hookState
             waiting = CodexHooks.waiting(for: hook)

@@ -134,6 +134,7 @@ General principles:
   (`source = 'cli'`, or `originator = 'codex-tui'`: since 0.162 the TUI runs through the shared
   app-server daemon and records `source = 'vscode'`, the same source Codex Desktop uses); newest first.
   Assign processes in start order, each taking the first unclaimed thread.
+  A process keeps its last matched thread when a poll finds none (busy database, rollout briefly closed).
 - **Title**: `~/.codex/session_index.jsonl` `thread_name` → thread `title` → first user message.
 - **Rollout** (`rollout_path` from the thread row), `event_msg` payloads:
   - `task_started` → `working` (also `model_context_window`); `task_complete` / `turn_aborted` →
@@ -151,6 +152,8 @@ General principles:
      `PreToolUse`→input if the tool is a question tool (`request_user_input`, `ask_user`,
      `AskUserQuestion`) else working, `PermissionRequest`→input, `Stop`/`Interrupt`→done.
      A hook record is used only if it is not older than the rollout's latest state (1 s tolerance).
+     `SessionStart` also fires when the TUI reconnects to the app-server and resumes its thread, so it never
+     ends a turn that the same process started; it only clears a turn left open by an earlier process.
   2. **Terminal title**: Codex sets its window/tab title to e.g. `Action Required | <thread> | <dir>`
      while waiting; matching `/action required|approval|needs? (your )?(input|approval)/i` forces `input`.
 - **Defaults**: `~/.codex/config.toml` top-level `model`, `model_reasoning_effort`.

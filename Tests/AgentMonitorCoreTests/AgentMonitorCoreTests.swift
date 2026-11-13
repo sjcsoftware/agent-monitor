@@ -482,6 +482,43 @@ struct CodexProviderTests {
         #expect(s.state == .done) // the hook record is now older than the rollout's state
         #expect(s.active == 8)
     }
+
+    @Test func keepsThreadWhenLookupFails() throws {
+        let home = TempDir()
+        defer { withExtendedLifetime(home) {} }
+        let r = home.write("r.jsonl", rollout([(2000, ["type": "task_started"])]))
+        let db = home.path + "/.codex/state_5.sqlite"
+        makeDB(db, rows: [("t1", "/w", 1995, 2000, r, nil, "cli")])
+        let procs = FakeProcs()
+        procs.add(10, name: "codex", started: 1990, cwd: "/w")
+        let p = CodexProvider(home: home.path, procs: procs, hookDir: home.path + "/hooks")
+        #expect(p.sessions(now: 2005).first?.state == .working)
+
+        try FileManager.default.moveItem(atPath: db, toPath: db + ".away") // one poll can't read the database
+        let s = try #require(p.sessions(now: 2006).first)
+        #expect(s.state == .working && s.title == "Thread t1")
+    }
+
+    @Test func reconnectSessionStartKeepsTurnWorking() throws {
+        let home = TempDir()
+        defer { withExtendedLifetime(home) {} }
+        let r = home.write("r.jsonl", rollout([(2000, ["type": "task_started"])]))
+        makeDB(home.path + "/.codex/state_5.sqlite", rows: [("t1", "/w", 1995, 2000, r, nil, "cli")])
+        let procs = FakeProcs()
+        procs.add(10, name: "codex", started: 1990, cwd: "/w")
+        let hooks = home.path + "/hooks"
+        let p = CodexProvider(home: home.path, procs: procs, hookDir: hooks)
+
+        // The TUI reconnects to the app-server mid-turn and resumes its thread.
+        CodexHooks.handle(input: Data(#"{"hook_event_name":"SessionStart","session_id":"t1"}"#.utf8), dir: hooks, now: 2010)
+        #expect(p.sessions(now: 2011).first?.state == .working)
+
+        // A new process resuming a turn an earlier run left open does start out ready.
+        procs.table[10] = nil
+        procs.add(11, name: "codex", started: 2050, cwd: "/w")
+        CodexHooks.handle(input: Data(#"{"hook_event_name":"SessionStart","session_id":"t1"}"#.utf8), dir: hooks, now: 2051)
+        #expect(p.sessions(now: 2052).first?.state == .ready)
+    }
 }
 
 // MARK: - Codex hooks
